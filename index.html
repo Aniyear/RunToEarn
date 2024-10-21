@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Run-to-Earn Platform</title>
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #1c1e21; /* Dark background */
+        color: #f2f2f2; /* Light text */
+        margin: 0;
+        padding: 0;
+        text-align: center;
+      }
+      h1 {
+        background-color: #008080; /* Teal for a dynamic look */
+        color: white;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      button {
+        background-color: #005f73; /* Darker teal for buttons */
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        margin: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #0a9396; /* Lighter teal on hover */
+      }
+      p {
+        font-size: 18px;
+        color: #f2f2f2; /* White text */
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #2f3e46; /* Slightly lighter dark background */
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
+      }
+      #runStatus,
+      #rewardBalance {
+        font-weight: bold;
+        color: #0a9396; /* Teal for emphasis */
+      }
+      footer {
+        margin-top: 30px;
+        font-size: 14px;
+        color: #94a1b2;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Run-to-Earn Platform</h1>
+
+    <div class="container">
+      <button id="connectWallet">Connect Wallet</button>
+      <p id="walletAddress"></p>
+
+      <h2>Start Run</h2>
+      <button id="startRun">Start Run</button>
+      <button id="endRun" disabled>End Run</button>
+      <p id="runStatus">Run not started</p>
+
+      <h2>Your Rewards</h2>
+      <p>Reward Balance: <span id="rewardBalance">0</span> Tokens</p>
+    </div>
+
+    <footer>Powered by Blockchain & Fitness Innovation</footer>
+
+    <script>
+      let web3;
+      let contract;
+      let userAddress;
+      let running = false; // Track if the run is in progress
+      let distance = 0; // Store the simulated distance
+
+      const contractABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			}
+		],
+		"name": "resetReward",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "RewardDistributed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "distance",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "RunTracked",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_distance",
+				"type": "uint256"
+			}
+		],
+		"name": "trackRunAndDistributeReward",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_distance",
+				"type": "uint256"
+			}
+		],
+		"name": "calculateReward",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			}
+		],
+		"name": "getRewardBalance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "rewards",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+      const contractAddress = "0xe03fec80dec2c7daaa99e09ff051d0cc0702672d";
+
+      window.onload = async function () {
+        if (typeof window.ethereum !== "undefined") {
+          web3 = new Web3(window.ethereum);
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+        } else {
+          alert("Please install MetaMask to use this dApp!");
+        }
+
+        contract = new web3.eth.Contract(contractABI, contractAddress);
+      };
+
+      document.getElementById("connectWallet").onclick = async function () {
+        const accounts = await web3.eth.getAccounts();
+        userAddress = accounts[0];
+        document.getElementById("walletAddress").innerText = "Connected: " + userAddress;
+      };
+
+      document.getElementById("startRun").onclick = function () {
+        if (!running) {
+          running = true;
+          document.getElementById("runStatus").innerText = "Run started!";
+
+          // Start simulating the run (distance will be accumulated)
+          distance = 0; // Reset distance
+          document.getElementById("endRun").disabled = false; // Enable the end run button
+
+          const interval = setInterval(() => {
+            // Simulate running by generating random distance every second
+            const simulatedDistance = Math.floor(Math.random() * (100 - 10 + 1)) + 10; // Random distance between 10 and 100 meters
+            distance += simulatedDistance;
+            console.log("Simulated run distance: ", distance, "meters");
+          }, 1000);
+
+          document.getElementById("endRun").onclick = async function () {
+            clearInterval(interval); // Stop the interval
+            document.getElementById("runStatus").innerText = "Ending run...";
+
+            // Call the smart contract to track the total run distance and reward the user
+            try {
+              await contract.methods.trackRunAndDistributeReward(userAddress, distance).send({ from: userAddress });
+              document.getElementById("runStatus").innerText = "Run completed! Total Distance: " + distance + " meters.";
+              running = false;
+              document.getElementById("endRun").disabled = true; // Disable the end run button
+            } catch (error) {
+              console.error(error);
+              document.getElementById("runStatus").innerText = "Error: " + error.message;
+            }
+          };
+        }
+      };
+
+      async function getRewardBalance() {
+        try {
+          const balance = await contract.methods.getRewardBalance(userAddress).call();
+          document.getElementById("rewardBalance").innerText = balance;
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      setInterval(getRewardBalance, 5000);
+    </script>
+  </body>
+</html>
