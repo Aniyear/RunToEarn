@@ -13,7 +13,7 @@ We are currently in the early development phase, and this version includes the s
 
 ## Demo Screenshots
 
-*(Screenshots will be added here)*
+![1](assets/1.png)
 
 ## Examples
 
